@@ -105,6 +105,7 @@ public class MainActivity extends AppCompatActivity {
                                     if (ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                                         return;
                                     }
+                                    Log.d(TAG, "Started discover Peers inside ...");
                                     manager.discoverPeers(channel, new WifiP2pManager.ActionListener() {
                                         @Override
                                         public void onSuccess() {
@@ -113,7 +114,7 @@ public class MainActivity extends AppCompatActivity {
 
                                         @Override
                                         public void onFailure(int i) {
-                                            Log.d(TAG, "onFailure: " + i);
+                                            Log.d(TAG, "discover Peers onFailure: " + i);
                                         }
                                     });
                                 }
@@ -124,6 +125,7 @@ public class MainActivity extends AppCompatActivity {
                                 }
                             });
                         } else{
+                            Log.d(TAG, "Started discover Peers ...");
                             manager.discoverPeers(channel, new WifiP2pManager.ActionListener() {
                                 @Override
                                 public void onSuccess() {
@@ -132,7 +134,7 @@ public class MainActivity extends AppCompatActivity {
 
                                 @Override
                                 public void onFailure(int i) {
-                                    Log.d(TAG, "onFailure: "+i);
+                                    Log.d(TAG, "discover Peers onFailure: " + i);
                                 }
                             });
                         }
@@ -178,11 +180,6 @@ public class MainActivity extends AppCompatActivity {
         if(wifiP2pInfo.groupFormed && wifiP2pInfo.isGroupOwner){
             receiverClass = new ReceiverClass();
             receiverClass.start();
-        }
-        else {
-            senderClass = new SenderClass(wifiP2pInfo.groupOwnerAddress.getHostAddress(), null);
-            senderClass.start();
-            Toast.makeText(getContext(),"File Sent",Toast.LENGTH_SHORT).show();
         }
 
     }
@@ -274,7 +271,7 @@ public class MainActivity extends AppCompatActivity {
                 OutputStream outputStream = socket.getOutputStream();
                 ContentResolver cr = getContext().getContentResolver();
                 InputStream inputStream = null;
-                inputStream = cr.openInputStream(Uri.parse("content://com.android.providers.media.documents/document/image%3A11020"));
+                inputStream = cr.openInputStream(uri);
                 while ((len = inputStream.read(buf)) != -1) {
                     outputStream.write(buf, 0, len);
                 }
