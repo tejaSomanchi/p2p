@@ -67,6 +67,7 @@ public class MainActivity extends AppCompatActivity {
     private final String TAG = "MainActivity";
     ReceiverClass receiverClass;
     SenderClass senderClass;
+    InetAddress nonGroupOwnerAddress;
 
     public Context getContext() {
         return this;
@@ -216,12 +217,14 @@ public class MainActivity extends AppCompatActivity {
         this.wifiP2pInfo = wifiP2pInfo;
         this.networkInfo = networkInfo;
         if(wifiP2pInfo.groupFormed && wifiP2pInfo.isGroupOwner){
+//            ReceiveIpAddressThread receiveIpAddressThread = new ReceiveIpAddressThread();
+//            receiveIpAddressThread.start();
             receiverClass = new ReceiverClass();
             receiverClass.start();
         }
 //        else if(wifiP2pInfo.groupFormed){
-//            senderClass = new SenderClass(wifiP2pInfo.groupOwnerAddress.getHostAddress(), null);
-//            senderClass.start();
+//            SendIpAddressThread sendIpAddressThread = new SendIpAddressThread(wifiP2pInfo.groupOwnerAddress.getHostAddress());
+//            sendIpAddressThread.start();
 //        }
 
     }
@@ -383,6 +386,77 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+
+    public class SendIpAddressThread extends Thread {
+        Socket socket;
+        String hostAddress;
+
+        public SendIpAddressThread(String hostAddress) {
+            this.hostAddress = hostAddress;
+        }
+
+        @Override
+        public void run() {
+            try {
+                socket = new Socket();
+                socket.setReuseAddress(true);
+                socket.connect(new InetSocketAddress(hostAddress, 8889), 500);
+                OutputStream os = socket.getOutputStream();
+                ObjectOutputStream oos = new ObjectOutputStream(os);
+                oos.writeObject(new String("BROFIST"));
+                oos.close();
+                os.close();
+            } catch (Exception e) {
+                Log.d(TAG, "Exception " + e);
+                e.printStackTrace();
+            } finally {
+                if (socket != null) {
+                    if (socket.isConnected()) {
+                        try {
+                            socket.close();
+                        } catch (Exception e) {
+                            Log.d(TAG, "Exception " + e);
+                            e.printStackTrace();
+                        }
+                    }
+                }
+
+            }
+        }
+    }
+
+
+    public class ReceiveIpAddressThread extends Thread {
+        ServerSocket serverSocket;
+
+        @Override
+        public void run() {
+            try {
+                serverSocket = new ServerSocket();
+                serverSocket.setReuseAddress(true);
+                serverSocket.bind(new InetSocketAddress(8889));
+                Socket client = serverSocket.accept();
+
+                /**
+                 * If this code is reached, a client has connected and transferred data
+                 * Save the input stream from the client as a JPEG file
+                 */
+
+                ObjectInputStream objectInputStream = new ObjectInputStream(client.getInputStream());
+                Object object = objectInputStream.readObject();
+                if (object.getClass().equals(String.class) && ((String) object).equals("BROFIST")) {
+                    nonGroupOwnerAddress = client.getInetAddress();
+                    Log.d(TAG, "Client IP address: "+client.getInetAddress());
+                }
+                serverSocket.close();
+
+            } catch (Exception e) {
+                Log.d(TAG, "Exception "+e);
+                e.printStackTrace();
+            }
+
+        }
+    }
 
     String getDisplayNameFromUri(Uri uri){
         String displayName = "";
