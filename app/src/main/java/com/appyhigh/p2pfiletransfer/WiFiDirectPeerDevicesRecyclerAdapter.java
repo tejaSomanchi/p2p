@@ -3,6 +3,7 @@ package com.appyhigh.p2pfiletransfer;
 import android.Manifest;
 import android.app.Activity;
 import android.content.pm.PackageManager;
+import android.net.wifi.WpsInfo;
 import android.net.wifi.p2p.WifiP2pConfig;
 import android.net.wifi.p2p.WifiP2pDevice;
 import android.net.wifi.p2p.WifiP2pManager;
@@ -86,6 +87,7 @@ public class WiFiDirectPeerDevicesRecyclerAdapter extends RecyclerView.Adapter<W
                     WifiP2pDevice wifiP2pDevice = mValues.get(getAdapterPosition());
                     WifiP2pConfig config = new WifiP2pConfig();
                     config.deviceAddress = wifiP2pDevice.deviceAddress;
+                    config.wps.setup = WpsInfo.PBC;
                     if (ActivityCompat.checkSelfPermission(itemView.getContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                         return;
                     }

@@ -1,10 +1,12 @@
 package com.appyhigh.p2pfiletransfer;
 
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
 import android.content.Context;
@@ -15,6 +17,7 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.net.wifi.p2p.WifiP2pDevice;
 import android.net.wifi.p2p.WifiP2pDeviceList;
+import android.net.wifi.p2p.WifiP2pGroup;
 import android.net.wifi.p2p.WifiP2pInfo;
 import android.net.wifi.p2p.WifiP2pManager;
 import android.os.Bundle;
@@ -23,6 +26,7 @@ import android.util.Log;
 import android.view.View;
 import android.webkit.PermissionRequest;
 import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
@@ -50,8 +54,10 @@ public class MainActivity extends AppCompatActivity {
     WifiP2pManager.ConnectionInfoListener connectionInfoListener;
     WifiP2pInfo wifiP2pInfo;
     private final String TAG = "MainActivity";
+    ReceiverClass receiverClass;
+    SenderClass senderClass;
 
-    public Context getContext(){
+    public Context getContext() {
         return this;
     }
 
@@ -72,67 +78,114 @@ public class MainActivity extends AppCompatActivity {
         recyclerView.setAdapter(adapter);
         Button discover = findViewById(R.id.discover);
         Button send = findViewById(R.id.send);
-        ActivityCompat.requestPermissions(this,new String[]{Manifest.permission.ACCESS_FINE_LOCATION },1);
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
+        }
         discover.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 if (ActivityCompat.checkSelfPermission(getBaseContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                     return;
                 }
-                manager.removeGroup(channel, new WifiP2pManager.ActionListener() {
+                if (receiverClass != null) {
+                    receiverClass.closeSocket();
+                }
+                if (senderClass != null) {
+                    senderClass.closeSocket();
+                }
+                manager.requestGroupInfo(channel, new WifiP2pManager.GroupInfoListener() {
                     @Override
-                    public void onSuccess() {
+                    public void onGroupInfoAvailable(WifiP2pGroup wifiP2pGroup) {
+                        if (wifiP2pGroup != null) {
+                            manager.removeGroup(channel, new WifiP2pManager.ActionListener() {
+                                @Override
+                                public void onSuccess() {
+                                    TextView isConnectedTo = findViewById(R.id.connectedTo);
+                                    isConnectedTo.setText("Not connected to any device");
+                                    if (ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                                        return;
+                                    }
+                                    manager.discoverPeers(channel, new WifiP2pManager.ActionListener() {
+                                        @Override
+                                        public void onSuccess() {
 
-                    }
+                                        }
 
-                    @Override
-                    public void onFailure(int i) {
-                        Log.d(TAG, "onFailure: "+i);
+                                        @Override
+                                        public void onFailure(int i) {
+                                            Log.d(TAG, "onFailure: " + i);
+                                        }
+                                    });
+                                }
+
+                                @Override
+                                public void onFailure(int i) {
+                                    Log.d(TAG, "onFailure: " + i);
+                                }
+                            });
+                        } else{
+                            manager.discoverPeers(channel, new WifiP2pManager.ActionListener() {
+                                @Override
+                                public void onSuccess() {
+
+                                }
+
+                                @Override
+                                public void onFailure(int i) {
+                                    Log.d(TAG, "onFailure: "+i);
+                                }
+                            });
+                        }
                     }
                 });
-                manager.discoverPeers(channel, new WifiP2pManager.ActionListener() {
-                    @Override
-                    public void onSuccess() {
 
-                    }
-
-                    @Override
-                    public void onFailure(int i) {
-                        Log.d(TAG, "onFailure: "+i);
-                    }
-                });
             }
         });
 
         send.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                SharedPreferences preferences = getContext().getSharedPreferences("MyPrefs", 0);
-                if(preferences.contains("host") && !preferences.getString("host","").equals("")){
-                    new SenderClass(preferences.getString("host",""));
+                Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType("*/*");
+                startActivityForResult(intent, 42);
+            }
+        });
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        Log.d(TAG, "onActivityResult called");
+        if (requestCode == 42 && resultCode == Activity.RESULT_OK) {
+            if(data!=null){
+                Uri uri = data.getData();
+                Log.d(TAG, "Uri of file to send, chosen by user: "+uri);
+                if(wifiP2pInfo!=null && wifiP2pInfo.groupFormed && !wifiP2pInfo.isGroupOwner) {
+                    senderClass = new SenderClass(wifiP2pInfo.groupOwnerAddress.getHostAddress(), uri);
+                    senderClass.start();
+                    Toast.makeText(getContext(),"File Sent",Toast.LENGTH_SHORT).show();
                 } else {
                     Toast.makeText(getContext(), "Receiver is not selected", Toast.LENGTH_SHORT).show();
                 }
             }
-        });
-
-        connectionInfoListener = new WifiP2pManager.ConnectionInfoListener() {
-            @Override
-            public void onConnectionInfoAvailable(WifiP2pInfo wifiP2pInfo) {
-                InetAddress groupOwnerAddress = wifiP2pInfo.groupOwnerAddress;
-                if(wifiP2pInfo.groupFormed && wifiP2pInfo.isGroupOwner){
-                    Log.d(TAG, "onConnectionInfoAvailable: Host "+groupOwnerAddress);
-                }
-                else {
-                    Log.d(TAG, "onConnectionInfoAvailable: Client "+groupOwnerAddress);
-                }
-            }
-        };
-
+        }
     }
 
 
+    public void decideDevice(WifiP2pInfo wifiP2pInfo){
+        this.wifiP2pInfo = wifiP2pInfo;
+        if(wifiP2pInfo.groupFormed && wifiP2pInfo.isGroupOwner){
+            receiverClass = new ReceiverClass();
+            receiverClass.start();
+        }
+        else {
+            senderClass = new SenderClass(wifiP2pInfo.groupOwnerAddress.getHostAddress(), null);
+            senderClass.start();
+            Toast.makeText(getContext(),"File Sent",Toast.LENGTH_SHORT).show();
+        }
 
+    }
 
     public class ReceiverClass extends Thread{
         Socket socket;
@@ -140,9 +193,10 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void run() {
-            ServerSocket serverSocket = null;
+            serverSocket = null;
             try {
-                serverSocket = new ServerSocket(8888);
+                serverSocket = new ServerSocket();
+                serverSocket.bind(new InetSocketAddress(8888));
                 Socket client = serverSocket.accept();
 
                 /**
@@ -152,13 +206,14 @@ public class MainActivity extends AppCompatActivity {
                 final File f = new File(Environment.getExternalStorageDirectory() + "/"
                         + getContext().getPackageName() + "/wifip2pshared-" + System.currentTimeMillis()
                         + ".jpg");
-
+                Log.d(TAG, "run: file resumed");
                 File dirs = new File(f.getParent());
                 if (!dirs.exists())
                     dirs.mkdirs();
                 f.createNewFile();
                 InputStream inputstream = client.getInputStream();
                 copyFile(inputstream, new FileOutputStream(f));
+                Log.d(TAG, "run: file sent");
                 serverSocket.close();
                 Intent intent = new Intent();
                 intent.setAction(android.content.Intent.ACTION_VIEW);
@@ -170,6 +225,16 @@ public class MainActivity extends AppCompatActivity {
                 e.printStackTrace();
             }
 
+        }
+
+        void closeSocket(){
+            if(serverSocket!=null && serverSocket.isBound()){
+                try {
+                    serverSocket.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
         }
     }
 
@@ -192,22 +257,24 @@ public class MainActivity extends AppCompatActivity {
     public class SenderClass extends Thread{
         Socket socket;
         String  hostAddress;
+        Uri uri;
         int len;
         byte buf[]  = new byte[1024];
 
-        public SenderClass(String hostAddress){
+        public SenderClass(String hostAddress, Uri uri){
             this.hostAddress = hostAddress;
-            socket = new Socket();
+            this.uri = uri;
         }
 
         @Override
         public void run() {
             try {
-                socket.connect(new InetSocketAddress(hostAddress, 8888), 5000);
+                socket = new Socket();
+                socket.connect(new InetSocketAddress(hostAddress, 8889), 500);
                 OutputStream outputStream = socket.getOutputStream();
                 ContentResolver cr = getContext().getContentResolver();
                 InputStream inputStream = null;
-                inputStream = cr.openInputStream(Uri.parse("/home/somanchi/Downloads/ic_launcher.png"));
+                inputStream = cr.openInputStream(Uri.parse("content://com.android.providers.media.documents/document/image%3A11020"));
                 while ((len = inputStream.read(buf)) != -1) {
                     outputStream.write(buf, 0, len);
                 }
@@ -226,6 +293,16 @@ public class MainActivity extends AppCompatActivity {
                             e.printStackTrace();
                         }
                     }
+                }
+            }
+        }
+
+        void closeSocket(){
+            if(socket!=null && socket.isBound()){
+                try {
+                    socket.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
             }
         }

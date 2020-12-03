@@ -18,6 +18,7 @@ import android.net.wifi.p2p.WifiP2pManager;
 import android.os.Environment;
 import android.util.Log;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -76,86 +77,25 @@ public class WiFiBroadCastReceiver extends BroadcastReceiver {
                     "WiFiDirectInfo: "+wifiP2pInfo+"\n" +
                     "NetworkInfo: "+networkInfo+"\n" +
                     "WiFi Direct Group: "+wifiP2pGroup);
-            TextView connectedTo = ((Activity) context).findViewById(R.id.connectedTo);
-            SharedPreferences preferences = context.getSharedPreferences("MyPrefs", 0);
-            SharedPreferences.Editor editor = preferences.edit();
-            if(wifiP2pInfo.groupFormed && wifiP2pInfo.isGroupOwner){
-                ArrayList<WifiP2pDevice> wifiP2pDevices = new ArrayList<>(Collections.unmodifiableCollection(wifiP2pGroup.getClientList()));
-                connectedTo.setText(" Receiver "+ wifiP2pDevices.get(0).deviceName);
-                editor.putString("host", wifiP2pInfo.groupOwnerAddress.getHostAddress());
-                editor.apply();
-            }else if(wifiP2pInfo.groupFormed){
-                connectedTo.setText(" Sender "+wifiP2pGroup.getOwner().deviceName);
-                new ReceiverClass(context);
-                editor.putString("host", "");
-                editor.apply();
+            if(networkInfo.isConnected()){
+                Log.d(TAG, "Network is connected");
+                TextView connectedTo = ((Activity) context).findViewById(R.id.connectedTo);
+                if(wifiP2pInfo.groupFormed && wifiP2pInfo.isGroupOwner){
+                    ArrayList<WifiP2pDevice> wifiP2pDevices = new ArrayList<>(Collections.unmodifiableCollection(wifiP2pGroup.getClientList()));
+                    if(wifiP2pGroup.getClientList()!=null){
+                        connectedTo.setText(" Sender "+ wifiP2pDevices.get(0).deviceName);
+                        activity.decideDevice(wifiP2pInfo);
+                    }
+                }else if(wifiP2pInfo.groupFormed){
+                    connectedTo.setText(" Receiver "+wifiP2pGroup.getOwner().deviceName);
+                    activity.decideDevice(wifiP2pInfo);
+                }
+                else {
+                    connectedTo.setText("Not connected to any device");
+                }
             }
-            else {
-                connectedTo.setText("Not connected to any device");
-                editor.putString("host", "");
-                editor.apply();
-            }
-
         } else if (WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION.equals(action)) {
             // Respond to this device's wifi state changing
-        }
-    }
-
-    public class ReceiverClass extends Thread{
-        Socket socket;
-        ServerSocket serverSocket;
-        Context context;
-        ReceiverClass(Context context){
-            this.context = context;
-        }
-
-        @Override
-        public void run() {
-            ServerSocket serverSocket = null;
-            try {
-                serverSocket = new ServerSocket(8888);
-                Socket client = serverSocket.accept();
-
-                /**
-                 * If this code is reached, a client has connected and transferred data
-                 * Save the input stream from the client as a JPEG file
-                 */
-                final File f = new File(Environment.getExternalStorageDirectory() + "/"
-                        + context.getPackageName() + "/wifip2pshared-" + System.currentTimeMillis()
-                        + ".jpg");
-
-                File dirs = new File(f.getParent());
-                if (!dirs.exists())
-                    dirs.mkdirs();
-                f.createNewFile();
-                InputStream inputstream = client.getInputStream();
-                copyFile(inputstream, new FileOutputStream(f));
-                serverSocket.close();
-                Intent intent = new Intent();
-                intent.setAction(android.content.Intent.ACTION_VIEW);
-                intent.setDataAndType(Uri.parse("file://" + f.getAbsolutePath()), "image/*");
-                context.startActivity(intent);
-
-            } catch (Exception e) {
-                Log.d(TAG, "Exception "+e);
-                e.printStackTrace();
-            }
-
-        }
-    }
-
-    public void copyFile(InputStream is, FileOutputStream os){
-        byte[] buffer = new byte[1024];
-        int length;
-        try{
-            while ((length = is.read(buffer)) > 0) {
-                os.write(buffer, 0, length);
-            }
-            is.close();
-            os.close();
-        } catch (Exception e){
-            Log.d(TAG, "Exception "+e);
-            e.printStackTrace();
         }
     }
 }
