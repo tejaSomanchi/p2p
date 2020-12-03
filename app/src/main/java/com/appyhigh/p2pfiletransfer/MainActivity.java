@@ -14,6 +14,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.net.Network;
 import android.net.NetworkInfo;
 import android.net.Uri;
@@ -24,6 +25,7 @@ import android.net.wifi.p2p.WifiP2pInfo;
 import android.net.wifi.p2p.WifiP2pManager;
 import android.os.Bundle;
 import android.os.Environment;
+import android.provider.OpenableColumns;
 import android.util.Log;
 import android.view.View;
 import android.webkit.PermissionRequest;
@@ -31,6 +33,10 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -85,6 +91,33 @@ public class MainActivity extends AppCompatActivity {
         Button send = findViewById(R.id.send);
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
+        }
+        if (receiverClass != null) {
+            receiverClass.closeSocket();
+        }
+        if (senderClass != null) {
+            senderClass.closeSocket();
+        }
+        manager.requestGroupInfo(channel, new WifiP2pManager.GroupInfoListener() {
+            @Override
+            public void onGroupInfoAvailable(WifiP2pGroup wifiP2pGroup) {
+                if (wifiP2pGroup != null) {
+                    manager.removeGroup(channel, new WifiP2pManager.ActionListener() {
+                        @Override
+                        public void onSuccess() {
+
+                        }
+
+                        @Override
+                        public void onFailure(int i) {
+                            Log.d(TAG, "onFailure: " + i);
+                        }
+                    });
+                }
+            }
+        });
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1);
         }
         discover.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -171,7 +204,6 @@ public class MainActivity extends AppCompatActivity {
                 if(wifiP2pInfo!=null && wifiP2pInfo.groupFormed && !wifiP2pInfo.isGroupOwner) {
                     senderClass = new SenderClass(wifiP2pInfo.groupOwnerAddress.getHostAddress(), uri);
                     senderClass.start();
-                    Toast.makeText(getContext(),"File Sent",Toast.LENGTH_SHORT).show();
                 } else {
                     Toast.makeText(getContext(), "Receiver is not selected", Toast.LENGTH_SHORT).show();
                 }
@@ -187,10 +219,10 @@ public class MainActivity extends AppCompatActivity {
             receiverClass = new ReceiverClass();
             receiverClass.start();
         }
-        else if(wifiP2pInfo.groupFormed){
-            senderClass = new SenderClass(wifiP2pInfo.groupOwnerAddress.getHostAddress(), null);
-            senderClass.start();
-        }
+//        else if(wifiP2pInfo.groupFormed){
+//            senderClass = new SenderClass(wifiP2pInfo.groupOwnerAddress.getHostAddress(), null);
+//            senderClass.start();
+//        }
 
     }
 
@@ -200,11 +232,10 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void run() {
-            serverSocket = null;
             try {
                 serverSocket = new ServerSocket();
                 serverSocket.setReuseAddress(true);
-                serverSocket.bind(new InetSocketAddress(8888));
+                serverSocket.bind(new InetSocketAddress(8889));
                 Socket client = serverSocket.accept();
 
                 /**
@@ -212,23 +243,32 @@ public class MainActivity extends AppCompatActivity {
                  * Save the input stream from the client as a JPEG file
                  */
 
-                ObjectInputStream objectInputStream = new ObjectInputStream(client.getInputStream());
-                Object object = objectInputStream.readObject();
-                if (object.getClass().equals(String.class) && ((String) object).equals("BROFIST")) {
-                    Log.d(TAG, "Client IP address: "+client.getInetAddress());
-                }
-//                final File f = new File(Environment.getExternalStorageDirectory() + "/"
-//                        + getContext().getPackageName() + "/wifip2pshared-" + System.currentTimeMillis()
-//                        + ".jpg");
-//                Log.d(TAG, "run: file resumed");
-//                File dirs = new File(f.getParent());
-//                if (!dirs.exists())
-//                    dirs.mkdirs();
-//                f.createNewFile();
-//                InputStream inputstream = client.getInputStream();
-//                copyFile(inputstream, new FileOutputStream(f));
-//                Log.d(TAG, "run: file sent");
-//                serverSocket.close();
+//                ObjectInputStream objectInputStream = new ObjectInputStream(client.getInputStream());
+//                Object object = objectInputStream.readObject();
+//                if (object.getClass().equals(String.class) && ((String) object).equals("BROFIST")) {
+//                    Log.d(TAG, "Client IP address: "+client.getInetAddress());
+//                }
+                InputStream inputstream = client.getInputStream();
+                BufferedInputStream bufferedInputStream = new BufferedInputStream(inputstream);
+                DataInputStream dataInputStream = new DataInputStream(bufferedInputStream);
+                String filename = dataInputStream.readUTF();
+                final File f = new File(Environment.getExternalStorageDirectory() + "/"
+                        + "p2pFileTransfer" + "/" + filename);
+                File dirs = new File(f.getParent());
+                Log.d(TAG, "run: file resumed "+f.getParent()+" "+dirs.exists());
+                if (!dirs.exists())
+                    dirs.mkdirs();
+                Log.d(TAG, "run: file resumed "+f.getParent()+" "+dirs.exists());
+                f.createNewFile();
+                copyFile(inputstream, new FileOutputStream(f));
+                Log.d(TAG, "run: file sent");
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Toast.makeText(getContext(),"File received",Toast.LENGTH_SHORT).show();
+                    }
+                });
+                serverSocket.close();
 //                Intent intent = new Intent();
 //                intent.setAction(android.content.Intent.ACTION_VIEW);
 //                intent.setDataAndType(Uri.parse("file://" + f.getAbsolutePath()), "image/*");
@@ -284,24 +324,37 @@ public class MainActivity extends AppCompatActivity {
         public void run() {
             try {
                 socket = new Socket();
-                Log.d(TAG, "run: Sender ");
                 socket.setReuseAddress(true);
                 socket.connect(new InetSocketAddress(hostAddress, 8889), 500);
-                OutputStream os = socket.getOutputStream();
-                ObjectOutputStream oos = new ObjectOutputStream(os);
-                oos.writeObject(new String("BROFIST"));
-                oos.close();
-                os.close();
-                socket.close();
-//                OutputStream outputStream = socket.getOutputStream();
-//                ContentResolver cr = getContext().getContentResolver();
-//                InputStream inputStream = null;
-//                inputStream = cr.openInputStream(Uri.parse("content://com.android.providers.media.documents/document/image%3A11020"));
-//                while ((len = inputStream.read(buf)) != -1) {
-//                    outputStream.write(buf, 0, len);
-//                }
-//                outputStream.close();
-//                inputStream.close();
+//                OutputStream os = socket.getOutputStream();
+//                ObjectOutputStream oos = new ObjectOutputStream(os);
+//                oos.writeObject(new String("BROFIST"));
+//                oos.close();
+//                os.close();
+//                socket.close();
+                OutputStream outputStream = socket.getOutputStream();
+                BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
+                DataOutputStream dataOutputStream = new DataOutputStream(bufferedOutputStream);
+                String displayName = getDisplayNameFromUri(uri);
+                Log.d(TAG, "run: Sending with displayname "+displayName);
+                dataOutputStream.writeUTF(displayName);
+                dataOutputStream.flush();
+
+                ContentResolver cr = getContext().getContentResolver();
+                InputStream inputStream = null;
+                inputStream = cr.openInputStream(uri);
+                while ((len = inputStream.read(buf)) != -1) {
+                    outputStream.write(buf, 0, len);
+                }
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Toast.makeText(getContext(),"File sent",Toast.LENGTH_SHORT).show();
+                    }
+                });
+                dataOutputStream.close();
+                outputStream.close();
+                inputStream.close();
             } catch (Exception e) {
                 Log.d(TAG, "Exception "+e);
                 e.printStackTrace();
@@ -331,6 +384,27 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
+    String getDisplayNameFromUri(Uri uri){
+        String displayName = "";
+        Cursor cursor = this.getContentResolver().query(uri, null, null, null, null, null);
+        if(cursor!=null && cursor.moveToFirst()){
+            int columnIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+            if(columnIndex != -1){
+                displayName = cursor.getString(columnIndex);
+            }
+        }
+        cursor.close();
+        if(displayName.equals("")){
+            displayName = uri.getLastPathSegment();
+            if(displayName == null){
+                displayName = uri.getEncodedPath();
+            }
+            if(displayName == null){
+                displayName = uri.toString();
+            }
+        }
+        return displayName;
+    }
 
     void notifyWiFiDirectPeerListDiscoveryFinished(WifiP2pDeviceList discoveredPeers) {
         adapter.setmValues(new ArrayList<WifiP2pDevice>(Collections.unmodifiableCollection(discoveredPeers.getDeviceList())));
