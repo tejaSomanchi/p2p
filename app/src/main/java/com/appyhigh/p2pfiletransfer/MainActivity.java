@@ -30,6 +30,7 @@ import android.util.Log;
 import android.view.View;
 import android.webkit.PermissionRequest;
 import android.widget.Button;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -68,6 +69,7 @@ public class MainActivity extends AppCompatActivity {
     ReceiverClass receiverClass;
     SenderClass senderClass;
     InetAddress nonGroupOwnerAddress;
+    ProgressBar progressBar;
 
     public Context getContext() {
         return this;
@@ -85,11 +87,14 @@ public class MainActivity extends AppCompatActivity {
         intentFilter.addAction(WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION);
         intentFilter.addAction(WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION);
         intentFilter.addAction(WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION);
+        registerReceiver(receiver, intentFilter);
         recyclerView = findViewById(R.id.device_list);
         adapter = new WiFiDirectPeerDevicesRecyclerAdapter(manager, channel);
         recyclerView.setAdapter(adapter);
         Button discover = findViewById(R.id.discover);
         Button send = findViewById(R.id.send);
+        progressBar = findViewById(R.id.progress);
+        progressBar.setVisibility(View.GONE);
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
         }
@@ -203,9 +208,13 @@ public class MainActivity extends AppCompatActivity {
                 Uri uri = data.getData();
                 Log.d(TAG, "Uri of file to send, chosen by user: "+uri);
                 if(wifiP2pInfo!=null && wifiP2pInfo.groupFormed && !wifiP2pInfo.isGroupOwner) {
-                    senderClass = new SenderClass(wifiP2pInfo.groupOwnerAddress.getHostAddress(), uri);
+                    senderClass = new SenderClass(wifiP2pInfo.groupOwnerAddress.getHostAddress(), uri, 8887);
                     senderClass.start();
-                } else {
+                } else if(wifiP2pInfo!=null && wifiP2pInfo.groupFormed && nonGroupOwnerAddress!=null){
+                    senderClass = new SenderClass(nonGroupOwnerAddress.getHostAddress(), uri,8888);
+                    senderClass.start();
+                }
+                else {
                     Toast.makeText(getContext(), "Receiver is not selected", Toast.LENGTH_SHORT).show();
                 }
             }
@@ -217,28 +226,35 @@ public class MainActivity extends AppCompatActivity {
         this.wifiP2pInfo = wifiP2pInfo;
         this.networkInfo = networkInfo;
         if(wifiP2pInfo.groupFormed && wifiP2pInfo.isGroupOwner){
-//            ReceiveIpAddressThread receiveIpAddressThread = new ReceiveIpAddressThread();
-//            receiveIpAddressThread.start();
-            receiverClass = new ReceiverClass();
+            ReceiveIpAddressThread receiveIpAddressThread = new ReceiveIpAddressThread();
+            receiveIpAddressThread.start();
+            receiverClass = new ReceiverClass(8887);
             receiverClass.start();
         }
-//        else if(wifiP2pInfo.groupFormed){
-//            SendIpAddressThread sendIpAddressThread = new SendIpAddressThread(wifiP2pInfo.groupOwnerAddress.getHostAddress());
-//            sendIpAddressThread.start();
-//        }
+        else if(wifiP2pInfo.groupFormed){
+            SendIpAddressThread sendIpAddressThread = new SendIpAddressThread(wifiP2pInfo.groupOwnerAddress.getHostAddress());
+            sendIpAddressThread.start();
+            receiverClass = new ReceiverClass(8888);
+            receiverClass.start();
+        }
 
     }
 
     public class ReceiverClass extends Thread{
         Socket socket;
         ServerSocket serverSocket;
+        int port;
+
+        ReceiverClass(int port){
+            this.port = port;
+        }
 
         @Override
         public void run() {
             try {
                 serverSocket = new ServerSocket();
                 serverSocket.setReuseAddress(true);
-                serverSocket.bind(new InetSocketAddress(8889));
+                serverSocket.bind(new InetSocketAddress(port));
                 Socket client = serverSocket.accept();
 
                 /**
@@ -246,12 +262,13 @@ public class MainActivity extends AppCompatActivity {
                  * Save the input stream from the client as a JPEG file
                  */
 
-//                ObjectInputStream objectInputStream = new ObjectInputStream(client.getInputStream());
-//                Object object = objectInputStream.readObject();
-//                if (object.getClass().equals(String.class) && ((String) object).equals("BROFIST")) {
-//                    Log.d(TAG, "Client IP address: "+client.getInetAddress());
-//                }
                 InputStream inputstream = client.getInputStream();
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        progressBar.setVisibility(View.VISIBLE);
+                    }
+                });
                 BufferedInputStream bufferedInputStream = new BufferedInputStream(inputstream);
                 DataInputStream dataInputStream = new DataInputStream(bufferedInputStream);
                 String filename = dataInputStream.readUTF();
@@ -268,6 +285,7 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
+                        progressBar.setVisibility(View.GONE);
                         Toast.makeText(getContext(),"File received",Toast.LENGTH_SHORT).show();
                     }
                 });
@@ -314,13 +332,15 @@ public class MainActivity extends AppCompatActivity {
     public class SenderClass extends Thread{
         Socket socket;
         String  hostAddress;
+        int port;
         Uri uri;
         int len;
         byte buf[]  = new byte[1024];
 
-        public SenderClass(String hostAddress, Uri uri){
+        public SenderClass(String hostAddress, Uri uri, int port){
             this.hostAddress = hostAddress;
             this.uri = uri;
+            this.port = port;
         }
 
         @Override
@@ -328,13 +348,7 @@ public class MainActivity extends AppCompatActivity {
             try {
                 socket = new Socket();
                 socket.setReuseAddress(true);
-                socket.connect(new InetSocketAddress(hostAddress, 8889), 500);
-//                OutputStream os = socket.getOutputStream();
-//                ObjectOutputStream oos = new ObjectOutputStream(os);
-//                oos.writeObject(new String("BROFIST"));
-//                oos.close();
-//                os.close();
-//                socket.close();
+                socket.connect(new InetSocketAddress(hostAddress, port), 500);
                 OutputStream outputStream = socket.getOutputStream();
                 BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
                 DataOutputStream dataOutputStream = new DataOutputStream(bufferedOutputStream);
@@ -342,7 +356,12 @@ public class MainActivity extends AppCompatActivity {
                 Log.d(TAG, "run: Sending with displayname "+displayName);
                 dataOutputStream.writeUTF(displayName);
                 dataOutputStream.flush();
-
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        progressBar.setVisibility(View.VISIBLE);
+                    }
+                });
                 ContentResolver cr = getContext().getContentResolver();
                 InputStream inputStream = null;
                 inputStream = cr.openInputStream(uri);
@@ -352,6 +371,7 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
+                        progressBar.setVisibility(View.GONE);
                         Toast.makeText(getContext(),"File sent",Toast.LENGTH_SHORT).show();
                     }
                 });
@@ -400,7 +420,7 @@ public class MainActivity extends AppCompatActivity {
             try {
                 socket = new Socket();
                 socket.setReuseAddress(true);
-                socket.connect(new InetSocketAddress(hostAddress, 8889), 500);
+                socket.connect(new InetSocketAddress(hostAddress, 9000), 500);
                 OutputStream os = socket.getOutputStream();
                 ObjectOutputStream oos = new ObjectOutputStream(os);
                 oos.writeObject(new String("BROFIST"));
@@ -434,7 +454,7 @@ public class MainActivity extends AppCompatActivity {
             try {
                 serverSocket = new ServerSocket();
                 serverSocket.setReuseAddress(true);
-                serverSocket.bind(new InetSocketAddress(8889));
+                serverSocket.bind(new InetSocketAddress(9000));
                 Socket client = serverSocket.accept();
 
                 /**
@@ -485,15 +505,22 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
+//    @Override
+//    protected void onResume() {
+//        super.onResume();
+//        registerReceiver(receiver, intentFilter);
+//    }
+//    /* unregister the broadcast receiver */
+//    @Override
+//    protected void onPause() {
+//        super.onPause();
+//        unregisterReceiver(receiver);
+//    }
+
+
     @Override
-    protected void onResume() {
-        super.onResume();
-        registerReceiver(receiver, intentFilter);
-    }
-    /* unregister the broadcast receiver */
-    @Override
-    protected void onPause() {
-        super.onPause();
+    protected void onDestroy() {
+        super.onDestroy();
         unregisterReceiver(receiver);
     }
 }
