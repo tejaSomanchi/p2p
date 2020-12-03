@@ -14,6 +14,8 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.net.Network;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.net.wifi.p2p.WifiP2pDevice;
 import android.net.wifi.p2p.WifiP2pDeviceList;
@@ -33,6 +35,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -53,6 +57,7 @@ public class MainActivity extends AppCompatActivity {
     RecyclerView recyclerView;
     WifiP2pManager.ConnectionInfoListener connectionInfoListener;
     WifiP2pInfo wifiP2pInfo;
+    NetworkInfo networkInfo;
     private final String TAG = "MainActivity";
     ReceiverClass receiverClass;
     SenderClass senderClass;
@@ -93,6 +98,8 @@ public class MainActivity extends AppCompatActivity {
                 if (senderClass != null) {
                     senderClass.closeSocket();
                 }
+                TextView isConnectedTo = findViewById(R.id.connectedTo);
+                isConnectedTo.setText("Not connected to any device");
                 manager.requestGroupInfo(channel, new WifiP2pManager.GroupInfoListener() {
                     @Override
                     public void onGroupInfoAvailable(WifiP2pGroup wifiP2pGroup) {
@@ -100,8 +107,6 @@ public class MainActivity extends AppCompatActivity {
                             manager.removeGroup(channel, new WifiP2pManager.ActionListener() {
                                 @Override
                                 public void onSuccess() {
-                                    TextView isConnectedTo = findViewById(R.id.connectedTo);
-                                    isConnectedTo.setText("Not connected to any device");
                                     if (ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                                         return;
                                     }
@@ -175,11 +180,16 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    public void decideDevice(WifiP2pInfo wifiP2pInfo){
+    public void decideDevice(WifiP2pInfo wifiP2pInfo, NetworkInfo networkInfo){
         this.wifiP2pInfo = wifiP2pInfo;
+        this.networkInfo = networkInfo;
         if(wifiP2pInfo.groupFormed && wifiP2pInfo.isGroupOwner){
             receiverClass = new ReceiverClass();
             receiverClass.start();
+        }
+        else if(wifiP2pInfo.groupFormed){
+            senderClass = new SenderClass(wifiP2pInfo.groupOwnerAddress.getHostAddress(), null);
+            senderClass.start();
         }
 
     }
@@ -193,6 +203,7 @@ public class MainActivity extends AppCompatActivity {
             serverSocket = null;
             try {
                 serverSocket = new ServerSocket();
+                serverSocket.setReuseAddress(true);
                 serverSocket.bind(new InetSocketAddress(8888));
                 Socket client = serverSocket.accept();
 
@@ -200,22 +211,28 @@ public class MainActivity extends AppCompatActivity {
                  * If this code is reached, a client has connected and transferred data
                  * Save the input stream from the client as a JPEG file
                  */
-                final File f = new File(Environment.getExternalStorageDirectory() + "/"
-                        + getContext().getPackageName() + "/wifip2pshared-" + System.currentTimeMillis()
-                        + ".jpg");
-                Log.d(TAG, "run: file resumed");
-                File dirs = new File(f.getParent());
-                if (!dirs.exists())
-                    dirs.mkdirs();
-                f.createNewFile();
-                InputStream inputstream = client.getInputStream();
-                copyFile(inputstream, new FileOutputStream(f));
-                Log.d(TAG, "run: file sent");
-                serverSocket.close();
-                Intent intent = new Intent();
-                intent.setAction(android.content.Intent.ACTION_VIEW);
-                intent.setDataAndType(Uri.parse("file://" + f.getAbsolutePath()), "image/*");
-                getContext().startActivity(intent);
+
+                ObjectInputStream objectInputStream = new ObjectInputStream(client.getInputStream());
+                Object object = objectInputStream.readObject();
+                if (object.getClass().equals(String.class) && ((String) object).equals("BROFIST")) {
+                    Log.d(TAG, "Client IP address: "+client.getInetAddress());
+                }
+//                final File f = new File(Environment.getExternalStorageDirectory() + "/"
+//                        + getContext().getPackageName() + "/wifip2pshared-" + System.currentTimeMillis()
+//                        + ".jpg");
+//                Log.d(TAG, "run: file resumed");
+//                File dirs = new File(f.getParent());
+//                if (!dirs.exists())
+//                    dirs.mkdirs();
+//                f.createNewFile();
+//                InputStream inputstream = client.getInputStream();
+//                copyFile(inputstream, new FileOutputStream(f));
+//                Log.d(TAG, "run: file sent");
+//                serverSocket.close();
+//                Intent intent = new Intent();
+//                intent.setAction(android.content.Intent.ACTION_VIEW);
+//                intent.setDataAndType(Uri.parse("file://" + f.getAbsolutePath()), "image/*");
+//                getContext().startActivity(intent);
 
             } catch (Exception e) {
                 Log.d(TAG, "Exception "+e);
@@ -267,16 +284,24 @@ public class MainActivity extends AppCompatActivity {
         public void run() {
             try {
                 socket = new Socket();
+                Log.d(TAG, "run: Sender ");
+                socket.setReuseAddress(true);
                 socket.connect(new InetSocketAddress(hostAddress, 8889), 500);
-                OutputStream outputStream = socket.getOutputStream();
-                ContentResolver cr = getContext().getContentResolver();
-                InputStream inputStream = null;
-                inputStream = cr.openInputStream(Uri.parse("content://com.android.providers.media.documents/document/image%3A11020"));
-                while ((len = inputStream.read(buf)) != -1) {
-                    outputStream.write(buf, 0, len);
-                }
-                outputStream.close();
-                inputStream.close();
+                OutputStream os = socket.getOutputStream();
+                ObjectOutputStream oos = new ObjectOutputStream(os);
+                oos.writeObject(new String("BROFIST"));
+                oos.close();
+                os.close();
+                socket.close();
+//                OutputStream outputStream = socket.getOutputStream();
+//                ContentResolver cr = getContext().getContentResolver();
+//                InputStream inputStream = null;
+//                inputStream = cr.openInputStream(Uri.parse("content://com.android.providers.media.documents/document/image%3A11020"));
+//                while ((len = inputStream.read(buf)) != -1) {
+//                    outputStream.write(buf, 0, len);
+//                }
+//                outputStream.close();
+//                inputStream.close();
             } catch (Exception e) {
                 Log.d(TAG, "Exception "+e);
                 e.printStackTrace();

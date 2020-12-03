@@ -84,11 +84,11 @@ public class WiFiBroadCastReceiver extends BroadcastReceiver {
                     ArrayList<WifiP2pDevice> wifiP2pDevices = new ArrayList<>(Collections.unmodifiableCollection(wifiP2pGroup.getClientList()));
                     if(wifiP2pGroup.getClientList()!=null && wifiP2pGroup.getClientList().size()>0){
                         connectedTo.setText(" Sender "+ wifiP2pDevices.get(0).deviceName);
-                        activity.decideDevice(wifiP2pInfo);
+                        activity.decideDevice(wifiP2pInfo, networkInfo);
                     }
                 }else if(wifiP2pInfo.groupFormed){
                     connectedTo.setText(" Receiver "+wifiP2pGroup.getOwner().deviceName);
-                    activity.decideDevice(wifiP2pInfo);
+                    activity.decideDevice(wifiP2pInfo, networkInfo);
                 }
                 else {
                     connectedTo.setText("Not connected to any device");
