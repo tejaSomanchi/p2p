@@ -271,7 +271,7 @@ public class MainActivity extends AppCompatActivity {
                 OutputStream outputStream = socket.getOutputStream();
                 ContentResolver cr = getContext().getContentResolver();
                 InputStream inputStream = null;
-                inputStream = cr.openInputStream(uri);
+                inputStream = cr.openInputStream(Uri.parse("content://com.android.providers.media.documents/document/image%3A11020"));
                 while ((len = inputStream.read(buf)) != -1) {
                     outputStream.write(buf, 0, len);
                 }
