@@ -57,6 +57,13 @@ public class WiFiDirectPeerDevicesRecyclerAdapter extends RecyclerView.Adapter<W
         notifyDataSetChanged();
     }
 
+    public void add(WifiP2pDevice device) {
+        if(mValues.contains(device)){
+            return;
+        }
+        mValues.add(device);
+        notifyDataSetChanged();
+    }
 
     @Override
     public int getItemCount() {

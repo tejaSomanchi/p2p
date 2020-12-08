@@ -56,18 +56,6 @@ public class WiFiBroadCastReceiver extends BroadcastReceiver {
 
         } else if (WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION.equals(action)) {
             // Call WifiP2pManager.requestPeers() to get a list of current peers
-            if (manager != null) {
-                if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                    return;
-                }
-
-                manager.requestPeers(channel, new WifiP2pManager.PeerListListener() {
-                    @Override
-                    public void onPeersAvailable(WifiP2pDeviceList wifiP2pDeviceList) {
-                        activity.notifyWiFiDirectPeerListDiscoveryFinished(wifiP2pDeviceList);
-                    };
-                });
-            }
         } else if (WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION.equals(action)) {
             // Respond to new connection or disconnections
             WifiP2pInfo wifiP2pInfo = intent.getParcelableExtra(WifiP2pManager.EXTRA_WIFI_P2P_INFO);

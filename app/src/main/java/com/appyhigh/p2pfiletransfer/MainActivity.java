@@ -23,6 +23,8 @@ import android.net.wifi.p2p.WifiP2pDeviceList;
 import android.net.wifi.p2p.WifiP2pGroup;
 import android.net.wifi.p2p.WifiP2pInfo;
 import android.net.wifi.p2p.WifiP2pManager;
+import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceInfo;
+import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceRequest;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.OpenableColumns;
@@ -52,13 +54,16 @@ import java.net.Socket;
 import java.security.Permission;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
 
     WifiP2pManager manager;
     WifiP2pManager.Channel channel;
     BroadcastReceiver receiver;
+    WifiP2pDnsSdServiceRequest serviceRequest;
     IntentFilter intentFilter;
     WiFiDirectPeerDevicesRecyclerAdapter adapter;
     RecyclerView recyclerView;
@@ -125,12 +130,16 @@ public class MainActivity extends AppCompatActivity {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1);
         }
+        startRegistration();
+        discoverServices();
         discover.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                if (ActivityCompat.checkSelfPermission(getBaseContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+
+                if (ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                     return;
                 }
+
                 if (receiverClass != null) {
                     receiverClass.closeSocket();
                 }
@@ -150,15 +159,30 @@ public class MainActivity extends AppCompatActivity {
                                         return;
                                     }
                                     Log.d(TAG, "Started discover Peers inside ...");
-                                    manager.discoverPeers(channel, new WifiP2pManager.ActionListener() {
+                                    serviceRequest = WifiP2pDnsSdServiceRequest.newInstance();
+                                    manager.addServiceRequest(channel, serviceRequest, new WifiP2pManager.ActionListener() {
                                         @Override
                                         public void onSuccess() {
+                                            if (ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                                                return;
+                                            }
+                                            manager.discoverServices(channel, new WifiP2pManager.ActionListener() {
 
+                                                @Override
+                                                public void onSuccess() {
+                                                    // Success!
+                                                }
+
+                                                @Override
+                                                public void onFailure(int code) {
+                                                    Log.d(TAG, "onFailure: " + code);
+                                                }
+                                            });
                                         }
 
                                         @Override
-                                        public void onFailure(int i) {
-                                            Log.d(TAG, "discover Peers onFailure: " + i);
+                                        public void onFailure(int code) {
+                                            Log.d(TAG, "onFailure: " + code);
                                         }
                                     });
                                 }
@@ -168,25 +192,40 @@ public class MainActivity extends AppCompatActivity {
                                     Log.d(TAG, "onFailure: " + i);
                                 }
                             });
-                        } else{
+                        } else {
                             Log.d(TAG, "Started discover Peers ...");
-                            manager.discoverPeers(channel, new WifiP2pManager.ActionListener() {
+                            serviceRequest = WifiP2pDnsSdServiceRequest.newInstance();
+                            manager.addServiceRequest(channel, serviceRequest, new WifiP2pManager.ActionListener() {
                                 @Override
                                 public void onSuccess() {
+                                    if (ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                                        return;
+                                    }
+                                    manager.discoverServices(channel, new WifiP2pManager.ActionListener() {
 
+                                        @Override
+                                        public void onSuccess() {
+                                            // Success!
+                                        }
+
+                                        @Override
+                                        public void onFailure(int code) {
+                                            Log.d(TAG, "onFailure: " + code);
+                                        }
+                                    });
                                 }
 
                                 @Override
-                                public void onFailure(int i) {
-                                    Log.d(TAG, "discover Peers onFailure: " + i);
+                                public void onFailure(int code) {
+                                    Log.d(TAG, "onFailure: " + code);
                                 }
                             });
                         }
                     }
                 });
 
-            }
-        });
+                }
+            });
 
         send.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -197,6 +236,61 @@ public class MainActivity extends AppCompatActivity {
                 startActivityForResult(intent, 42);
             }
         });
+    }
+
+
+    private void startRegistration() {
+
+        Map record = new HashMap();
+        record.put("version", ""+android.os.Build.VERSION.SDK_INT);
+        record.put("buddyname", "device" + (int) (Math.random() * 1000));
+        record.put("available", "visible");
+
+        // Service information.  Pass it an instance name, service type
+        // _protocol._transportlayer , and the map containing
+        // information other devices will want once they connect to this one.
+        WifiP2pDnsSdServiceInfo serviceInfo =
+                WifiP2pDnsSdServiceInfo.newInstance("_test", "_presence._tcp", record);
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+        manager.addLocalService(channel, serviceInfo, new WifiP2pManager.ActionListener() {
+            @Override
+            public void onSuccess() {
+
+            }
+
+            @Override
+            public void onFailure(int arg0) {
+                Log.d(TAG, "onFailure: registration "+arg0);
+            }
+        });
+    }
+
+
+    private void discoverServices(){
+        final HashMap<String, String> buddies = new HashMap<String, String>();
+        WifiP2pManager.DnsSdTxtRecordListener recordListener = new WifiP2pManager.DnsSdTxtRecordListener() {
+            @Override
+            public void onDnsSdTxtRecordAvailable(String fullDomain, Map record, WifiP2pDevice device) {
+                Log.d(TAG, "DnsSdTxtRecord available -" + record.toString());
+                buddies.put(device.deviceAddress, (String) record.get("buddyname"));
+            }
+        };
+
+        WifiP2pManager.DnsSdServiceResponseListener serviceListener = new WifiP2pManager.DnsSdServiceResponseListener() {
+            @Override
+            public void onDnsSdServiceAvailable(String instanceName, String registrationType, WifiP2pDevice resourceType) {
+//                resourceType.deviceName = buddies.containsKey(resourceType.deviceAddress) ? buddies.get(resourceType.deviceAddress) : resourceType.deviceName;
+                if(buddies.containsKey(resourceType.deviceAddress)){
+                    adapter.add(resourceType);
+                    Log.d(TAG, "onServiceAvailable " + instanceName+" "+resourceType.deviceName+" "+buddies.get(resourceType.deviceAddress));
+                }
+            }
+        };
+
+        manager.setDnsSdResponseListeners(channel, serviceListener, recordListener);
     }
 
     @Override
