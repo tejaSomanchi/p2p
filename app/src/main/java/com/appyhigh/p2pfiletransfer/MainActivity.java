@@ -14,6 +14,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.net.Network;
 import android.net.NetworkInfo;
@@ -224,13 +225,14 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
 
-                }
-            });
+            }
+        });
 
         send.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
                 intent.addCategory(Intent.CATEGORY_OPENABLE);
                 intent.setType("*/*");
                 startActivityForResult(intent, 42);
@@ -299,13 +301,25 @@ public class MainActivity extends AppCompatActivity {
         Log.d(TAG, "onActivityResult called");
         if (requestCode == 42 && resultCode == Activity.RESULT_OK) {
             if(data!=null){
-                Uri uri = data.getData();
-                Log.d(TAG, "Uri of file to send, chosen by user: "+uri);
+                ArrayList<Uri> uris = new ArrayList<>();
+                if(data.getClipData()!=null){
+                    for(int i=0; i<data.getClipData().getItemCount(); i++){
+                        Uri uri = data.getClipData().getItemAt(i).getUri();
+                        uris.add(uri);
+                        Log.d(TAG, "Uri of file to send, chosen by user: "+uri);
+                    }
+                }
+                else {
+                    Uri uri = data.getData();
+                    uris.add(uri);
+                    Log.d(TAG, "Uri of file to send, chosen by user: "+uri);
+                }
+
                 if(wifiP2pInfo!=null && wifiP2pInfo.groupFormed && !wifiP2pInfo.isGroupOwner) {
-                    senderClass = new SenderClass(wifiP2pInfo.groupOwnerAddress.getHostAddress(), uri, 8887);
+                    senderClass = new SenderClass(wifiP2pInfo.groupOwnerAddress.getHostAddress(), uris, 8887);
                     senderClass.start();
                 } else if(wifiP2pInfo!=null && wifiP2pInfo.groupFormed && nonGroupOwnerAddress!=null){
-                    senderClass = new SenderClass(nonGroupOwnerAddress.getHostAddress(), uri,8888);
+                    senderClass = new SenderClass(nonGroupOwnerAddress.getHostAddress(), uris,8888);
                     senderClass.start();
                 }
                 else {
@@ -338,6 +352,8 @@ public class MainActivity extends AppCompatActivity {
         Socket socket;
         ServerSocket serverSocket;
         int port;
+        byte[] buffer = new byte[1024];
+        int length;
 
         ReceiverClass(int port){
             this.port = port;
@@ -356,38 +372,56 @@ public class MainActivity extends AppCompatActivity {
                  * Save the input stream from the client as a JPEG file
                  */
 
-                InputStream inputstream = client.getInputStream();
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
                         progressBar.setVisibility(View.VISIBLE);
                     }
                 });
+                InputStream inputstream = client.getInputStream();
                 BufferedInputStream bufferedInputStream = new BufferedInputStream(inputstream);
                 DataInputStream dataInputStream = new DataInputStream(bufferedInputStream);
-                String filename = dataInputStream.readUTF();
-                final File f = new File(Environment.getExternalStorageDirectory() + "/"
-                        + "p2pFileTransfer" + "/" + filename);
-                File dirs = new File(f.getParent());
-                Log.d(TAG, "run: file resumed "+f.getParent()+" "+dirs.exists());
-                if (!dirs.exists())
-                    dirs.mkdirs();
-                Log.d(TAG, "run: file resumed "+f.getParent()+" "+dirs.exists());
-                f.createNewFile();
-                copyFile(inputstream, new FileOutputStream(f));
-                Log.d(TAG, "run: file sent");
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        progressBar.setVisibility(View.GONE);
-                        Toast.makeText(getContext(),"File received",Toast.LENGTH_SHORT).show();
+                int noOfFiles = dataInputStream.readInt();
+                Log.d(TAG, "run: receiving "+noOfFiles);
+                ArrayList<File> files = new ArrayList<>();
+                ArrayList<Long> fileSizes = new ArrayList<>();
+                for(int i=0;i<noOfFiles;i++){
+                    String filename = dataInputStream.readUTF();
+                    long fileSize = dataInputStream.readLong();
+                    File f = new File(Environment.getExternalStorageDirectory() + "/"
+                            + "p2pFileTransfer" + "/" + filename);
+                    Log.d(TAG, "run: "+filename+" "+fileSize);
+                    files.add(f);
+                    fileSizes.add(fileSize);
+                }
+                for(int i=0;i<noOfFiles;i++) {
+                    File f = files.get(i);
+                    File dirs = new File(f.getParent());
+                    if (!dirs.exists())
+                        dirs.mkdirs();
+                    f.createNewFile();
+                    long fileSize = fileSizes.get(i);
+                    long total = 0;
+                    FileOutputStream os = new FileOutputStream(f);
+                    while (total<fileSize && (length = inputstream.read(buffer, 0, fileSize-total > buffer.length ? buffer.length : (int)(fileSize-total))) > 0)
+                    {
+                        os.write(buffer, 0, length);
+                        total += length;
                     }
-                });
+                    os.close();
+                    Log.d(TAG, "run: file received "+f.getName()+" ");
+                }
+                inputstream.close();
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            progressBar.setVisibility(View.GONE);
+                            Toast.makeText(getContext(),"File received",Toast.LENGTH_SHORT).show();
+                        }
+                    });
                 serverSocket.close();
-//                Intent intent = new Intent();
-//                intent.setAction(android.content.Intent.ACTION_VIEW);
-//                intent.setDataAndType(Uri.parse("file://" + f.getAbsolutePath()), "image/*");
-//                getContext().startActivity(intent);
+                receiverClass = new ReceiverClass(port);
+                receiverClass.start();
 
             } catch (Exception e) {
                 Log.d(TAG, "Exception "+e);
@@ -407,33 +441,18 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public void copyFile(InputStream is, FileOutputStream os){
-        byte[] buffer = new byte[1024];
-        int length;
-        try{
-            while ((length = is.read(buffer)) > 0) {
-                os.write(buffer, 0, length);
-            }
-            is.close();
-            os.close();
-        } catch (Exception e){
-            Log.d(TAG, "Exception "+e);
-            e.printStackTrace();
-        }
-    }
-
 
     public class SenderClass extends Thread{
         Socket socket;
         String  hostAddress;
         int port;
-        Uri uri;
+        ArrayList<Uri> uris;
         int len;
         byte buf[]  = new byte[1024];
 
-        public SenderClass(String hostAddress, Uri uri, int port){
+        public SenderClass(String hostAddress, ArrayList<Uri> uris, int port){
             this.hostAddress = hostAddress;
-            this.uri = uri;
+            this.uris = uris;
             this.port = port;
         }
 
@@ -445,23 +464,38 @@ public class MainActivity extends AppCompatActivity {
                 socket.connect(new InetSocketAddress(hostAddress, port), 500);
                 OutputStream outputStream = socket.getOutputStream();
                 BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
-                DataOutputStream dataOutputStream = new DataOutputStream(bufferedOutputStream);
-                String displayName = getDisplayNameFromUri(uri);
-                Log.d(TAG, "run: Sending with displayname "+displayName);
-                dataOutputStream.writeUTF(displayName);
-                dataOutputStream.flush();
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
                         progressBar.setVisibility(View.VISIBLE);
                     }
                 });
-                ContentResolver cr = getContext().getContentResolver();
-                InputStream inputStream = null;
-                inputStream = cr.openInputStream(uri);
-                while ((len = inputStream.read(buf)) != -1) {
-                    outputStream.write(buf, 0, len);
+                DataOutputStream dataOutputStream = new DataOutputStream(bufferedOutputStream);
+                dataOutputStream.writeInt(uris.size());
+                dataOutputStream.flush();
+                for(Uri uri : uris) {
+                    String displayName = getDisplayNameFromUri(uri);
+                    File f = new File(uri.getPath());
+                    AssetFileDescriptor afd = getContentResolver().openAssetFileDescriptor(uri,"r");
+                    long fileSize = afd.getLength();
+                    Log.d(TAG, "run: Sending with displayname " + displayName+" "+fileSize);
+                    afd.close();
+                    dataOutputStream.writeUTF(displayName);
+                    dataOutputStream.writeLong(fileSize);
+                    dataOutputStream.flush();
                 }
+                for(Uri uri : uris){
+                    ContentResolver cr = getContext().getContentResolver();
+                    InputStream inputStream = null;
+                    inputStream = cr.openInputStream(uri);
+                    while ((len = inputStream.read(buf)) != -1) {
+                        outputStream.write(buf, 0, len);
+                    }
+                    dataOutputStream.flush();
+                    inputStream.close();
+                }
+                dataOutputStream.close();
+                outputStream.close();
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
@@ -469,9 +503,6 @@ public class MainActivity extends AppCompatActivity {
                         Toast.makeText(getContext(),"File sent",Toast.LENGTH_SHORT).show();
                     }
                 });
-                dataOutputStream.close();
-                outputStream.close();
-                inputStream.close();
             } catch (Exception e) {
                 Log.d(TAG, "Exception "+e);
                 e.printStackTrace();
