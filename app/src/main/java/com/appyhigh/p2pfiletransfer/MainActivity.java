@@ -110,24 +110,6 @@ public class MainActivity extends AppCompatActivity {
         if (senderClass != null) {
             senderClass.closeSocket();
         }
-        manager.requestGroupInfo(channel, new WifiP2pManager.GroupInfoListener() {
-            @Override
-            public void onGroupInfoAvailable(WifiP2pGroup wifiP2pGroup) {
-                if (wifiP2pGroup != null) {
-                    manager.removeGroup(channel, new WifiP2pManager.ActionListener() {
-                        @Override
-                        public void onSuccess() {
-
-                        }
-
-                        @Override
-                        public void onFailure(int i) {
-                            Log.d(TAG, "onFailure: " + i);
-                        }
-                    });
-                }
-            }
-        });
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1);
         }
@@ -149,82 +131,34 @@ public class MainActivity extends AppCompatActivity {
                 }
                 TextView isConnectedTo = findViewById(R.id.connectedTo);
                 isConnectedTo.setText("Not connected to any device");
-                manager.requestGroupInfo(channel, new WifiP2pManager.GroupInfoListener() {
+
+                Log.d(TAG, "Started discover Peers ...");
+                serviceRequest = WifiP2pDnsSdServiceRequest.newInstance();
+                manager.addServiceRequest(channel, serviceRequest, new WifiP2pManager.ActionListener() {
                     @Override
-                    public void onGroupInfoAvailable(WifiP2pGroup wifiP2pGroup) {
-                        if (wifiP2pGroup != null) {
-                            manager.removeGroup(channel, new WifiP2pManager.ActionListener() {
-                                @Override
-                                public void onSuccess() {
-                                    if (ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                                        return;
-                                    }
-                                    Log.d(TAG, "Started discover Peers inside ...");
-                                    serviceRequest = WifiP2pDnsSdServiceRequest.newInstance();
-                                    manager.addServiceRequest(channel, serviceRequest, new WifiP2pManager.ActionListener() {
-                                        @Override
-                                        public void onSuccess() {
-                                            if (ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                                                return;
-                                            }
-                                            manager.discoverServices(channel, new WifiP2pManager.ActionListener() {
-
-                                                @Override
-                                                public void onSuccess() {
-                                                    // Success!
-                                                }
-
-                                                @Override
-                                                public void onFailure(int code) {
-                                                    Log.d(TAG, "onFailure: " + code);
-                                                }
-                                            });
-                                        }
-
-                                        @Override
-                                        public void onFailure(int code) {
-                                            Log.d(TAG, "onFailure: " + code);
-                                        }
-                                    });
-                                }
-
-                                @Override
-                                public void onFailure(int i) {
-                                    Log.d(TAG, "onFailure: " + i);
-                                }
-                            });
-                        } else {
-                            Log.d(TAG, "Started discover Peers ...");
-                            serviceRequest = WifiP2pDnsSdServiceRequest.newInstance();
-                            manager.addServiceRequest(channel, serviceRequest, new WifiP2pManager.ActionListener() {
-                                @Override
-                                public void onSuccess() {
-                                    if (ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                                        return;
-                                    }
-                                    manager.discoverServices(channel, new WifiP2pManager.ActionListener() {
-
-                                        @Override
-                                        public void onSuccess() {
-                                            // Success!
-                                        }
-
-                                        @Override
-                                        public void onFailure(int code) {
-                                            Log.d(TAG, "onFailure: " + code);
-                                        }
-                                    });
-                                }
-
-                                @Override
-                                public void onFailure(int code) {
-                                    Log.d(TAG, "onFailure: " + code);
-                                }
-                            });
+                    public void onSuccess() {
+                        if (ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                            return;
                         }
+                        manager.discoverServices(channel, new WifiP2pManager.ActionListener() {
+
+                            @Override
+                            public void onSuccess() {
+                                // Success!
+                            }
+
+                            @Override
+                            public void onFailure(int code) {
+                                Log.d(TAG, "onFailure: " + code);
+                            }
+                        });
+                    }
+
+                    @Override
+                    public void onFailure(int code) {
+                        Log.d(TAG, "onFailure: " + code);
                     }
                 });
-
             }
         });
 
@@ -244,7 +178,7 @@ public class MainActivity extends AppCompatActivity {
     private void startRegistration() {
 
         Map record = new HashMap();
-        record.put("version", ""+android.os.Build.VERSION.SDK_INT);
+        record.put("version", "" + android.os.Build.VERSION.SDK_INT);
         record.put("buddyname", "device" + (int) (Math.random() * 1000));
         record.put("available", "visible");
 
@@ -265,13 +199,13 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onFailure(int arg0) {
-                Log.d(TAG, "onFailure: registration "+arg0);
+                Log.d(TAG, "onFailure: registration " + arg0);
             }
         });
     }
 
 
-    private void discoverServices(){
+    private void discoverServices() {
         final HashMap<String, String> buddies = new HashMap<String, String>();
         WifiP2pManager.DnsSdTxtRecordListener recordListener = new WifiP2pManager.DnsSdTxtRecordListener() {
             @Override
@@ -285,9 +219,9 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onDnsSdServiceAvailable(String instanceName, String registrationType, WifiP2pDevice resourceType) {
 //                resourceType.deviceName = buddies.containsKey(resourceType.deviceAddress) ? buddies.get(resourceType.deviceAddress) : resourceType.deviceName;
-                if(buddies.containsKey(resourceType.deviceAddress)){
+                if (buddies.containsKey(resourceType.deviceAddress)) {
                     adapter.add(resourceType);
-                    Log.d(TAG, "onServiceAvailable " + instanceName+" "+resourceType.deviceName+" "+buddies.get(resourceType.deviceAddress));
+                    Log.d(TAG, "onServiceAvailable " + instanceName + " " + resourceType.deviceName + " " + buddies.get(resourceType.deviceAddress));
                 }
             }
         };
@@ -300,29 +234,27 @@ public class MainActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         Log.d(TAG, "onActivityResult called");
         if (requestCode == 42 && resultCode == Activity.RESULT_OK) {
-            if(data!=null){
+            if (data != null) {
                 ArrayList<Uri> uris = new ArrayList<>();
-                if(data.getClipData()!=null){
-                    for(int i=0; i<data.getClipData().getItemCount(); i++){
+                if (data.getClipData() != null) {
+                    for (int i = 0; i < data.getClipData().getItemCount(); i++) {
                         Uri uri = data.getClipData().getItemAt(i).getUri();
                         uris.add(uri);
-                        Log.d(TAG, "Uri of file to send, chosen by user: "+uri);
+                        Log.d(TAG, "Uri of file to send, chosen by user: " + uri);
                     }
-                }
-                else {
+                } else {
                     Uri uri = data.getData();
                     uris.add(uri);
-                    Log.d(TAG, "Uri of file to send, chosen by user: "+uri);
+                    Log.d(TAG, "Uri of file to send, chosen by user: " + uri);
                 }
 
-                if(wifiP2pInfo!=null && wifiP2pInfo.groupFormed && !wifiP2pInfo.isGroupOwner) {
+                if (wifiP2pInfo != null && wifiP2pInfo.groupFormed && !wifiP2pInfo.isGroupOwner) {
                     senderClass = new SenderClass(wifiP2pInfo.groupOwnerAddress.getHostAddress(), uris, 8887);
                     senderClass.start();
-                } else if(wifiP2pInfo!=null && wifiP2pInfo.groupFormed && nonGroupOwnerAddress!=null){
-                    senderClass = new SenderClass(nonGroupOwnerAddress.getHostAddress(), uris,8888);
+                } else if (wifiP2pInfo != null && wifiP2pInfo.groupFormed && nonGroupOwnerAddress != null) {
+                    senderClass = new SenderClass(nonGroupOwnerAddress.getHostAddress(), uris, 8888);
                     senderClass.start();
-                }
-                else {
+                } else {
                     Toast.makeText(getContext(), "Receiver is not selected", Toast.LENGTH_SHORT).show();
                 }
             }
@@ -330,16 +262,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    public void decideDevice(WifiP2pInfo wifiP2pInfo, NetworkInfo networkInfo){
+    public void decideDevice(WifiP2pInfo wifiP2pInfo, NetworkInfo networkInfo) {
         this.wifiP2pInfo = wifiP2pInfo;
         this.networkInfo = networkInfo;
-        if(wifiP2pInfo.groupFormed && wifiP2pInfo.isGroupOwner){
+        if (wifiP2pInfo.groupFormed && wifiP2pInfo.isGroupOwner) {
             ReceiveIpAddressThread receiveIpAddressThread = new ReceiveIpAddressThread();
             receiveIpAddressThread.start();
             receiverClass = new ReceiverClass(8887);
             receiverClass.start();
-        }
-        else if(wifiP2pInfo.groupFormed){
+        } else if (wifiP2pInfo.groupFormed) {
             SendIpAddressThread sendIpAddressThread = new SendIpAddressThread(wifiP2pInfo.groupOwnerAddress.getHostAddress());
             sendIpAddressThread.start();
             receiverClass = new ReceiverClass(8888);
@@ -348,14 +279,14 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    public class ReceiverClass extends Thread{
+    public class ReceiverClass extends Thread {
         Socket socket;
         ServerSocket serverSocket;
         int port;
         byte[] buffer = new byte[1024];
         int length;
 
-        ReceiverClass(int port){
+        ReceiverClass(int port) {
             this.port = port;
         }
 
@@ -382,19 +313,19 @@ public class MainActivity extends AppCompatActivity {
                 BufferedInputStream bufferedInputStream = new BufferedInputStream(inputstream);
                 DataInputStream dataInputStream = new DataInputStream(bufferedInputStream);
                 int noOfFiles = dataInputStream.readInt();
-                Log.d(TAG, "run: receiving "+noOfFiles);
+                Log.d(TAG, "run: receiving " + noOfFiles);
                 ArrayList<File> files = new ArrayList<>();
                 ArrayList<Long> fileSizes = new ArrayList<>();
-                for(int i=0;i<noOfFiles;i++){
+                for (int i = 0; i < noOfFiles; i++) {
                     String filename = dataInputStream.readUTF();
                     long fileSize = dataInputStream.readLong();
                     File f = new File(Environment.getExternalStorageDirectory() + "/"
                             + "p2pFileTransfer" + "/" + filename);
-                    Log.d(TAG, "run: "+filename+" "+fileSize);
+                    Log.d(TAG, "run: " + filename + " " + fileSize);
                     files.add(f);
                     fileSizes.add(fileSize);
                 }
-                for(int i=0;i<noOfFiles;i++) {
+                for (int i = 0; i < noOfFiles; i++) {
                     File f = files.get(i);
                     File dirs = new File(f.getParent());
                     if (!dirs.exists())
@@ -403,35 +334,34 @@ public class MainActivity extends AppCompatActivity {
                     long fileSize = fileSizes.get(i);
                     long total = 0;
                     FileOutputStream os = new FileOutputStream(f);
-                    while (total<fileSize && (length = inputstream.read(buffer, 0, fileSize-total > buffer.length ? buffer.length : (int)(fileSize-total))) > 0)
-                    {
+                    while (total < fileSize && (length = inputstream.read(buffer, 0, fileSize - total > buffer.length ? buffer.length : (int) (fileSize - total))) > 0) {
                         os.write(buffer, 0, length);
                         total += length;
                     }
                     os.close();
-                    Log.d(TAG, "run: file received "+f.getName()+" ");
+                    Log.d(TAG, "run: file received " + f.getName() + " ");
                 }
                 inputstream.close();
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            progressBar.setVisibility(View.GONE);
-                            Toast.makeText(getContext(),"File received",Toast.LENGTH_SHORT).show();
-                        }
-                    });
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        progressBar.setVisibility(View.GONE);
+                        Toast.makeText(getContext(), "File received", Toast.LENGTH_SHORT).show();
+                    }
+                });
                 serverSocket.close();
                 receiverClass = new ReceiverClass(port);
                 receiverClass.start();
 
             } catch (Exception e) {
-                Log.d(TAG, "Exception "+e);
+                Log.d(TAG, "Exception " + e);
                 e.printStackTrace();
             }
 
         }
 
-        void closeSocket(){
-            if(serverSocket!=null && serverSocket.isBound()){
+        void closeSocket() {
+            if (serverSocket != null && serverSocket.isBound()) {
                 try {
                     serverSocket.close();
                 } catch (IOException e) {
@@ -442,15 +372,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    public class SenderClass extends Thread{
+    public class SenderClass extends Thread {
         Socket socket;
-        String  hostAddress;
+        String hostAddress;
         int port;
         ArrayList<Uri> uris;
         int len;
-        byte buf[]  = new byte[1024];
+        byte buf[] = new byte[1024];
 
-        public SenderClass(String hostAddress, ArrayList<Uri> uris, int port){
+        public SenderClass(String hostAddress, ArrayList<Uri> uris, int port) {
             this.hostAddress = hostAddress;
             this.uris = uris;
             this.port = port;
@@ -473,18 +403,18 @@ public class MainActivity extends AppCompatActivity {
                 DataOutputStream dataOutputStream = new DataOutputStream(bufferedOutputStream);
                 dataOutputStream.writeInt(uris.size());
                 dataOutputStream.flush();
-                for(Uri uri : uris) {
+                for (Uri uri : uris) {
                     String displayName = getDisplayNameFromUri(uri);
                     File f = new File(uri.getPath());
-                    AssetFileDescriptor afd = getContentResolver().openAssetFileDescriptor(uri,"r");
+                    AssetFileDescriptor afd = getContentResolver().openAssetFileDescriptor(uri, "r");
                     long fileSize = afd.getLength();
-                    Log.d(TAG, "run: Sending with displayname " + displayName+" "+fileSize);
+                    Log.d(TAG, "run: Sending with displayname " + displayName + " " + fileSize);
                     afd.close();
                     dataOutputStream.writeUTF(displayName);
                     dataOutputStream.writeLong(fileSize);
                     dataOutputStream.flush();
                 }
-                for(Uri uri : uris){
+                for (Uri uri : uris) {
                     ContentResolver cr = getContext().getContentResolver();
                     InputStream inputStream = null;
                     inputStream = cr.openInputStream(uri);
@@ -500,11 +430,11 @@ public class MainActivity extends AppCompatActivity {
                     @Override
                     public void run() {
                         progressBar.setVisibility(View.GONE);
-                        Toast.makeText(getContext(),"File sent",Toast.LENGTH_SHORT).show();
+                        Toast.makeText(getContext(), "File sent", Toast.LENGTH_SHORT).show();
                     }
                 });
             } catch (Exception e) {
-                Log.d(TAG, "Exception "+e);
+                Log.d(TAG, "Exception " + e);
                 e.printStackTrace();
             } finally {
                 if (socket != null) {
@@ -512,7 +442,7 @@ public class MainActivity extends AppCompatActivity {
                         try {
                             socket.close();
                         } catch (Exception e) {
-                            Log.d(TAG, "Exception "+e);
+                            Log.d(TAG, "Exception " + e);
                             e.printStackTrace();
                         }
                     }
@@ -520,8 +450,8 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        void closeSocket(){
-            if(socket!=null && socket.isBound()){
+        void closeSocket() {
+            if (socket != null && socket.isBound()) {
                 try {
                     socket.close();
                 } catch (IOException e) {
@@ -591,34 +521,34 @@ public class MainActivity extends AppCompatActivity {
                 Object object = objectInputStream.readObject();
                 if (object.getClass().equals(String.class) && ((String) object).equals("BROFIST")) {
                     nonGroupOwnerAddress = client.getInetAddress();
-                    Log.d(TAG, "Client IP address: "+client.getInetAddress());
+                    Log.d(TAG, "Client IP address: " + client.getInetAddress());
                 }
                 serverSocket.close();
 
             } catch (Exception e) {
-                Log.d(TAG, "Exception "+e);
+                Log.d(TAG, "Exception " + e);
                 e.printStackTrace();
             }
 
         }
     }
 
-    String getDisplayNameFromUri(Uri uri){
+    String getDisplayNameFromUri(Uri uri) {
         String displayName = "";
         Cursor cursor = this.getContentResolver().query(uri, null, null, null, null, null);
-        if(cursor!=null && cursor.moveToFirst()){
+        if (cursor != null && cursor.moveToFirst()) {
             int columnIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
-            if(columnIndex != -1){
+            if (columnIndex != -1) {
                 displayName = cursor.getString(columnIndex);
             }
         }
         cursor.close();
-        if(displayName.equals("")){
+        if (displayName.equals("")) {
             displayName = uri.getLastPathSegment();
-            if(displayName == null){
+            if (displayName == null) {
                 displayName = uri.getEncodedPath();
             }
-            if(displayName == null){
+            if (displayName == null) {
                 displayName = uri.toString();
             }
         }
@@ -646,6 +576,27 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+        manager.requestGroupInfo(channel, new WifiP2pManager.GroupInfoListener() {
+            @Override
+            public void onGroupInfoAvailable(WifiP2pGroup wifiP2pGroup) {
+                if (wifiP2pGroup != null) {
+                    manager.removeGroup(channel, new WifiP2pManager.ActionListener() {
+                        @Override
+                        public void onSuccess() {
+
+                        }
+
+                        @Override
+                        public void onFailure(int i) {
+
+                        }
+                    });
+                }
+            }
+        });
         unregisterReceiver(receiver);
     }
 }

@@ -65,9 +65,9 @@ public class WiFiBroadCastReceiver extends BroadcastReceiver {
                     "WiFiDirectInfo: "+wifiP2pInfo+"\n" +
                     "NetworkInfo: "+networkInfo+"\n" +
                     "WiFi Direct Group: "+wifiP2pGroup);
+            TextView connectedTo = ((Activity) context).findViewById(R.id.connectedTo);
             if(networkInfo.isConnected()){
                 Log.d(TAG, "Network is connected");
-                TextView connectedTo = ((Activity) context).findViewById(R.id.connectedTo);
                 if(wifiP2pInfo.groupFormed && wifiP2pInfo.isGroupOwner){
                     ArrayList<WifiP2pDevice> wifiP2pDevices = new ArrayList<>(Collections.unmodifiableCollection(wifiP2pGroup.getClientList()));
                     if(wifiP2pGroup.getClientList()!=null && wifiP2pGroup.getClientList().size()>0){
@@ -81,6 +81,9 @@ public class WiFiBroadCastReceiver extends BroadcastReceiver {
                 else {
                     connectedTo.setText("Not connected to any device");
                 }
+            }
+            else {
+                connectedTo.setText("Not connected to any device");
             }
         } else if (WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION.equals(action)) {
             // Respond to this device's wifi state changing
