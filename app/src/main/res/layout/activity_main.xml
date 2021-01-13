@@ -38,6 +38,13 @@
             android:text="Discover"/>
 
     </LinearLayout>
+    <Button
+        android:id="@+id/sendToPc"
+        android:layout_gravity="center"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="10dp"
+        android:text="send to pc"/>
 
     <ProgressBar
         android:id="@+id/progress"

@@ -101,6 +101,13 @@ public class MainActivity extends AppCompatActivity {
         Button send = findViewById(R.id.send);
         progressBar = findViewById(R.id.progress);
         progressBar.setVisibility(View.GONE);
+        Button sendToPc= findViewById(R.id.sendToPc);
+        sendToPc.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                startActivity(new Intent(MainActivity.this, ServerActivity.class));
+            }
+        });
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
         }
