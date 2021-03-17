@@ -267,29 +267,29 @@ public class ConnectionFileTransferActivity extends AppCompatActivity {
                     parentFolder.mkdir();
                 }
                 // Get the received file (which will be in the Downloads folder)
-                if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) {
-                    // Because of https://developer.android.com/preview/privacy/scoped-storage, we are not
-                    // allowed to access filepaths from another process directly. Instead, we must open the
-                    // uri using our ContentResolver.
-                    try {
-                        Uri uri = FileProvider.getUriForFile(context, BuildConfig.APPLICATION_ID+".fileprovider", filePayload.asFile().asJavaFile());
-                        // Copy the file to a new location.
-                        InputStream in = context.getContentResolver().openInputStream(uri);
-                        File dest = new File(Environment.getExternalStorageDirectory() + "/"
-                                + context.getString(R.string.app_name) + "/" + filename);
-                        copyStream(in, new FileOutputStream(dest));
-                        Log.d("TAG", "processFilePayload: "+fileNumber);
-                        filesListAdapter.update(fileNumber);
-                        fileNumber++;
-                        context.getContentResolver().delete(uri, null, null);
-                    } catch (Exception e) {
-                        // Log the error.
-                        Log.d("TAG", "processFilePayload: "+e.getMessage());
-                        e.printStackTrace();
-                    } finally {
-                        // Delete the original file.
-                    }
-                } else {
+//                if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) {
+//                    // Because of https://developer.android.com/preview/privacy/scoped-storage, we are not
+//                    // allowed to access filepaths from another process directly. Instead, we must open the
+//                    // uri using our ContentResolver.
+//                    try {
+//                        Uri uri = FileProvider.getUriForFile(context, BuildConfig.APPLICATION_ID+".fileprovider", filePayload.asFile().asJavaFile());
+//                        // Copy the file to a new location.
+//                        InputStream in = context.getContentResolver().openInputStream(uri);
+//                        File dest = new File(Environment.getExternalStorageDirectory() + "/"
+//                                + context.getString(R.string.app_name) + "/" + filename);
+//                        copyStream(in, new FileOutputStream(dest));
+//                        Log.d("TAG", "processFilePayload: "+fileNumber);
+//                        filesListAdapter.update(fileNumber);
+//                        fileNumber++;
+//                        context.getContentResolver().delete(uri, null, null);
+//                    } catch (Exception e) {
+//                        // Log the error.
+//                        Log.d("TAG", "processFilePayload: "+e.getMessage());
+//                        e.printStackTrace();
+//                    } finally {
+//                        // Delete the original file.
+//                    }
+//                } else {
                     File payloadFile = filePayload.asFile().asJavaFile();
 
                     File dest = new File(Environment.getExternalStorageDirectory() + "/"
@@ -301,7 +301,7 @@ public class ConnectionFileTransferActivity extends AppCompatActivity {
                     filesListAdapter.update(fileNumber);
                     fileNumber++;
 
-                }
+//                }
                 Toast.makeText(context," File Received", Toast.LENGTH_SHORT).show();
             }
         }
