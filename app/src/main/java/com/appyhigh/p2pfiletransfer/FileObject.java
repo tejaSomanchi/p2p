@@ -7,7 +7,14 @@ public class FileObject {
     String filename;
     String size;
     long fileSize;
+    long currentSize;
+    int percent = 0;
     boolean isDownloaded;
+    boolean isCompleted = false;
+
+    public FileObject(){
+
+    }
 
     public FileObject(String uri, String filename, String size, long fileSize, boolean isDownloaded) {
         this.uri = uri;
